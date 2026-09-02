@@ -22,6 +22,33 @@ public sealed class BTree<TKey, TValue>(int minDegree = 2) where TKey : ICompara
 
     public bool TryGet(TKey key, out TValue value) => TryGet(_root, key, out value);
 
+    /// <summary>All entries in ascending key order — the storage-engine "table scan" primitive.</summary>
+    public IEnumerable<(TKey Key, TValue Value)> InOrder() => InOrder(_root);
+
+    private static IEnumerable<(TKey Key, TValue Value)> InOrder(Node node)
+    {
+        for (var i = 0; i < node.Keys.Count; i++)
+        {
+            if (!node.IsLeaf)
+            {
+                foreach (var entry in InOrder(node.Children[i]))
+                {
+                    yield return entry;
+                }
+            }
+
+            yield return (node.Keys[i], node.Values[i]);
+        }
+
+        if (!node.IsLeaf)
+        {
+            foreach (var entry in InOrder(node.Children[^1]))
+            {
+                yield return entry;
+            }
+        }
+    }
+
     public Result<Unit> Insert(TKey key, TValue value)
     {
         if (TryGet(key, out _))
