@@ -33,6 +33,17 @@ customers.Insert(1, new Customer(1, "Alice", "Rome"));
 var romans = QueryEngine.Filter(QueryEngine.Scan(customers), c => c.City == "Rome");
 ```
 
+```csharp
+// The page-backed index: nodes live in pages, not in memory — genuinely durable across a restart.
+var index = (await PagedBTree.CreateAsync(store, pool, minDegree: 32)).Value;
+await index.InsertAsync(key: 42, value: 1000);
+var rootPageId = index.RootPageId; // remember this — you'll need it to reopen the tree later
+
+// ... process restarts; reopen the same file/pool ...
+var reopened = PagedBTree.Open(store, pool, minDegree: 32, rootPageId);
+Result<(bool Found, long Value)> found = await reopened.TryGetAsync(42); // Success((true, 1000))
+```
+
 ---
 
 ## What's in the box
@@ -42,14 +53,15 @@ var romans = QueryEngine.Filter(QueryEngine.Scan(customers), c => c.City == "Rom
 | Page storage | `FilePageStore` | Fixed-size pages, sequential allocation, whole-page reads/writes only |
 | Buffer pool | `BufferPool` | LRU eviction over an `IPageStore`; never owns/disposes the store |
 | Records | `SlottedPage` | Variable-length records in a page: slot directory + backward-growing data |
-| Index | `BTree<TKey,TValue>` | Full search/insert/delete with borrow/merge rebalancing; `InOrder()` for a sorted scan |
+| Index (in-memory) | `BTree<TKey,TValue>` | Full search/insert/delete with borrow/merge rebalancing; `InOrder()` for a sorted scan |
+| Index (page-backed) | `PagedBTree` | `long`-keyed B+Tree — internal nodes hold only routing keys/child `PageId`s, values live only in leaves; nodes are pages, read/written through `BufferPool`. Insert-only so far |
 | WAL & recovery | `FileWriteAheadLog`, `WalRecovery` | Redo-only log; `BufferPool` can log a write before acknowledging it |
 | Transactions | `LockManager`, `Transaction` | Page-granularity shared/exclusive locks, 2PL enforced structurally (no partial-release API) |
 | Query operators | `QueryEngine.Scan/Filter/Project/Join` | The operator vocabulary a planner would target — no query text yet |
 
 ## Not there yet
 
-- The B-Tree is in-memory only — not yet mapped onto `SlottedPage`-formatted pages via `BufferPool`
+- `PagedBTree` has no delete — the in-memory `BTree` does, if you need that today
 - `SlottedPage.Delete` doesn't reclaim or compact space
 - No wait-for-graph deadlock detector — a `LockManager` timeout just means "abort and retry"
 - No SQL text, parser, or planner — `QueryEngine` is the operator layer underneath where one would go
