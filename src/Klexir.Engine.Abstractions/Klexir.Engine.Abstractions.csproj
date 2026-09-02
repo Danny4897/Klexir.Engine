@@ -2,7 +2,14 @@
   <PropertyGroup>
     <AssemblyName>Klexir.Engine.Abstractions</AssemblyName>
     <PackageId>Klexir.Engine.Abstractions</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>Danny4897</Authors>
     <Description>Public contracts for the Klexir storage engine (pages, records, transactions).</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/Danny4897/Klexir.Engine</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Danny4897/Klexir.Engine</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>klexir;storage-engine;database;b-tree</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
   </PropertyGroup>
