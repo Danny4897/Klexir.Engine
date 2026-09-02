@@ -1,21 +1,59 @@
 # Klexir.Engine
 
-Storage engine and database internals experiments for Klexir, built on [MonadicSharp](https://www.nuget.org/packages/MonadicSharp) `Result<T>`.
+[![CI](https://github.com/Danny4897/Klexir.Engine/actions/workflows/ci.yml/badge.svg)](https://github.com/Danny4897/Klexir.Engine/actions/workflows/ci.yml)
+[![.NET](https://img.shields.io/badge/.NET-8.0-purple.svg)](https://dotnet.microsoft.com/)
 
-Only `Klexir.Engine.Abstractions` is a public NuGet package (`IPageStore`, `PageId`, `SlotId`, `IWriteAheadLog`, `LockMode`, `TransactionId`).
+Storage engine and database internals, built from the file up: pages, a buffer pool, a B-Tree, a write-ahead log, 2PL transactions, and the relational operators a query planner would sit on top of. Built on [MonadicSharp](https://www.nuget.org/packages/MonadicSharp/) `Result<T>` — a corrupt page, a lock timeout, or a truncated WAL record all come back as a failed `Result`, never an exception.
 
-**Page storage.** `FilePageStore` backs a single file with a configurable page size, allocates pages sequentially, and reads/writes whole pages only (a write must be exactly `PageSize` bytes); reopening an existing file resumes allocation after its last page.
+> **Status: private research repo, not published to NuGet.** These pieces are not yet wired into one cohesive database — each is independently built and tested, matching how a real engine's internals are usually studied. Reference the project directly until/unless it's published.
 
-**Buffer pool.** `BufferPool` caches pages from an `IPageStore` in memory with LRU eviction: dirty pages are flushed to the store before their frame is reused, `FlushAsync`/`FlushAllAsync` persist on demand, and disposing the pool flushes everything — it does not own or dispose the underlying store.
+---
 
-**Records.** `SlottedPage` is the variable-length record layout for one page: a 4-byte header (slot count, free-space offset), a slot directory growing forward, records growing backward from the end. `Insert`/`Read`/`Delete` operate on a page's raw bytes; delete zeroes the slot but does not yet reclaim or compact space.
+## Quick example — durable pages and an index
 
-**Index.** `BTree<TKey,TValue>` is a classic in-memory B-Tree (search/insert/delete, node splitting, and the full borrow/merge rebalancing on delete) — not yet page-backed; that integration (mapping nodes onto `SlottedPage`-formatted pages through `BufferPool`) is a later increment. `Insert` rejects a duplicate key rather than upserting. `InOrder()` yields every entry in ascending key order. An internal `ValidateInvariants()` checks node fill-factor bounds, ascending key order, children-count = keys-count+1, and equal leaf depth — exercised by tests that insert/delete hundreds of keys in random order.
+```csharp
+await using var store = (await FilePageStore.OpenAsync("data.klx", pageSize: 4096)).Value;
+await using var wal = (await FileWriteAheadLog.OpenAsync("data.wal")).Value;
+await using var pool = new BufferPool(store, capacity: 256, wal); // writes are logged before they're acknowledged
 
-**WAL & recovery.** `FileWriteAheadLog` is an append-only redo log (`[pageId][length][bytes]`, fsynced per record); `BufferPool` optionally logs a write before acknowledging it. `WalRecovery.ReplayAsync` replays every record onto an already-open page store, restoring pages that were dirty-but-unflushed at crash time. Simplified — no ARIES-style undo/checkpoint records, redo-only.
+var pageId = (await store.AllocatePageAsync()).Value;
+await pool.WriteAsync(pageId, someRecordBytes);
+// ... process exits before pool.FlushAllAsync() ever runs ...
 
-**Transactions.** `LockManager` grants page-granularity shared/exclusive locks with a poll-based, caller-timeout acquire (no wait-for-graph deadlock detector — a timed-out acquire means abort-and-retry). `Transaction` enforces 2PL structurally: there is no partial-release API, only `Commit`/`Abort`, which release every lock the transaction holds together.
+// On restart: reopen the same files and replay whatever the WAL saw but the store never got.
+var recoveredStore = (await FilePageStore.OpenAsync("data.klx", pageSize: 4096)).Value;
+var recoveredWal = (await FileWriteAheadLog.OpenAsync("data.wal")).Value;
+await WalRecovery.ReplayAsync(recoveredWal, recoveredStore); // → Result<int>, number of pages restored
+```
 
-**Query operators.** `QueryEngine.Scan/Filter/Project/Join` are the relational operator vocabulary a future planner/parser would target — `Scan` reads a `BTree` via `InOrder()`; `Filter`/`Project`/`Join` compose over any sequence. No query text, no parser, no planner yet.
+```csharp
+var customers = new BTree<int, Customer>();
+customers.Insert(1, new Customer(1, "Alice", "Rome"));
 
-Still open: page-backed B-Tree, page compaction, and a SQL parser/planner.
+var romans = QueryEngine.Filter(QueryEngine.Scan(customers), c => c.City == "Rome");
+```
+
+---
+
+## What's in the box
+
+| Layer | API | Notes |
+|---|---|---|
+| Page storage | `FilePageStore` | Fixed-size pages, sequential allocation, whole-page reads/writes only |
+| Buffer pool | `BufferPool` | LRU eviction over an `IPageStore`; never owns/disposes the store |
+| Records | `SlottedPage` | Variable-length records in a page: slot directory + backward-growing data |
+| Index | `BTree<TKey,TValue>` | Full search/insert/delete with borrow/merge rebalancing; `InOrder()` for a sorted scan |
+| WAL & recovery | `FileWriteAheadLog`, `WalRecovery` | Redo-only log; `BufferPool` can log a write before acknowledging it |
+| Transactions | `LockManager`, `Transaction` | Page-granularity shared/exclusive locks, 2PL enforced structurally (no partial-release API) |
+| Query operators | `QueryEngine.Scan/Filter/Project/Join` | The operator vocabulary a planner would target — no query text yet |
+
+## Not there yet
+
+- The B-Tree is in-memory only — not yet mapped onto `SlottedPage`-formatted pages via `BufferPool`
+- `SlottedPage.Delete` doesn't reclaim or compact space
+- No wait-for-graph deadlock detector — a `LockManager` timeout just means "abort and retry"
+- No SQL text, parser, or planner — `QueryEngine` is the operator layer underneath where one would go
+
+## Requirements
+
+.NET 8 SDK + [MonadicSharp](https://www.nuget.org/packages/MonadicSharp/) `Result<T>`.
