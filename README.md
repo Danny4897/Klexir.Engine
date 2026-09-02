@@ -2,10 +2,11 @@
 
 [![CI](https://github.com/Danny4897/Klexir.Engine/actions/workflows/ci.yml/badge.svg)](https://github.com/Danny4897/Klexir.Engine/actions/workflows/ci.yml)
 [![.NET](https://img.shields.io/badge/.NET-8.0-purple.svg)](https://dotnet.microsoft.com/)
+[![Docs](https://img.shields.io/badge/docs-vitepress-7c3aed.svg)](https://danny4897.github.io/Klexir.Engine/)
 
 Storage engine and database internals, built from the file up: pages, a buffer pool, a B-Tree, a write-ahead log, 2PL transactions, and the relational operators a query planner would sit on top of. Built on [MonadicSharp](https://www.nuget.org/packages/MonadicSharp/) `Result<T>` — a corrupt page, a lock timeout, or a truncated WAL record all come back as a failed `Result`, never an exception.
 
-> **Status: private research repo, not published to NuGet.** These pieces are not yet wired into one cohesive database — each is independently built and tested, matching how a real engine's internals are usually studied. Reference the project directly until/unless it's published.
+> **Status: public research repo, not yet published to NuGet.** These pieces are not yet wired into one cohesive database — each is independently built and tested, matching how a real engine's internals are usually studied. Reference the project directly until/unless it's published.
 
 ---
 

@@ -2,3 +2,8 @@ bin/
 obj/
 TestResults/
 *.page
+
+# Docs (VitePress)
+docs/node_modules/
+docs/.vitepress/dist/
+docs/.vitepress/cache/
