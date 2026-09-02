@@ -5,9 +5,11 @@ namespace Klexir.Engine;
 
 /// <summary>
 /// In-memory page cache over an <see cref="IPageStore"/> with LRU eviction. Does not own the store's lifetime —
-/// disposing the pool flushes dirty pages but never disposes the underlying store.
+/// disposing the pool flushes dirty pages but never disposes the underlying store. When <paramref name="wal"/> is
+/// configured, every write is durably logged before it's acknowledged, so a crash before the next flush can still
+/// be replayed via <see cref="WalRecovery"/>.
 /// </summary>
-public sealed class BufferPool(IPageStore store, int capacity) : IAsyncDisposable
+public sealed class BufferPool(IPageStore store, int capacity, IWriteAheadLog? wal = null) : IAsyncDisposable
 {
     private readonly Dictionary<PageId, Frame> _frames = [];
     private readonly LinkedList<PageId> _lruMostRecentFirst = new();
@@ -42,6 +44,15 @@ public sealed class BufferPool(IPageStore store, int capacity) : IAsyncDisposabl
             if (loaded.IsFailure)
             {
                 return Result<Unit>.Failure(loaded.Error);
+            }
+
+            if (wal is not null)
+            {
+                var appended = await wal.AppendAsync(pageId, data, cancellationToken).ConfigureAwait(false);
+                if (appended.IsFailure)
+                {
+                    return appended;
+                }
             }
 
             data.CopyTo(loaded.Value.Data);
