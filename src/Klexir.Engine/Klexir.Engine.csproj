@@ -5,4 +5,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Klexir.Engine.Abstractions\Klexir.Engine.Abstractions.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Klexir.Engine.Tests" />
+  </ItemGroup>
 </Project>
