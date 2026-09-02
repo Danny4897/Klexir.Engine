@@ -1,0 +1,18 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet restore Klexir.Engine.sln
+      - run: dotnet build Klexir.Engine.sln --configuration Release --no-restore
+      - run: dotnet test Klexir.Engine.sln --configuration Release --no-build

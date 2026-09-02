@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="MonadicSharp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Klexir.Engine.Abstractions\Klexir.Engine.Abstractions.csproj" />
+  </ItemGroup>
+</Project>
